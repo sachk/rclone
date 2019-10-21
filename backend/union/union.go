@@ -259,18 +259,23 @@ func (f *Fs) List(ctx context.Context, dir string) (entries fs.DirEntries, err e
 	set := make(map[string]fs.DirEntry)
 	found := false
 	for _, remote := range f.remotes {
-		var remoteEntries, err = remote.List(ctx, dir)
-		if err == fs.ErrorDirNotFound {
-			continue
-		}
-		if err != nil {
-			return nil, errors.Wrapf(err, "List failed on %v", remote)
-		}
-		found = true
-		for _, remoteEntry := range remoteEntries {
-			set[remoteEntry.Remote()] = remoteEntry
+		g.Go(func() (err error) {
+			defer g.Done()
+			var remoteEntries, err = remote.List(ctx, dir)
+		
+			if err == fs.ErrorDirNotFound {
+				continue
+			}
+			if err != nil {
+				return nil, errors.Wrapf(err, "List failed on %v", remote)
+			}
+			found = true
+			for _, remoteEntry := range remoteEntries {
+				set[remoteEntry.Remote()] = remoteEntry
+			}
 		}
 	}
+	found = g.Wait()
 	if !found {
 		return nil, fs.ErrorDirNotFound
 	}
